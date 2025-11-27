@@ -1,0 +1,694 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Curator's Run v3.5 (Void Nautical)</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700&family=Playfair+Display:ital,wght@1,500;1,700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --color-bg: #050510; /* Void Black */
+            --color-primary: #28317C;
+            --color-secondary: #3B82F6;
+            --color-text: #ffffff;
+        }
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: var(--color-bg);
+            font-family: 'Inter', sans-serif;
+            touch-action: none;
+            user-select: none;
+        }
+        #canvas-container {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 1;
+        }
+        #ui-layer {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 10; pointer-events: none;
+        }
+        
+        /* Editorial HUD */
+        #hud-top-left {
+            position: absolute; top: 40px; left: 40px;
+        }
+        #hud-top-right {
+            position: absolute; top: 40px; right: 40px; text-align: right;
+        }
+        .label { 
+            font-size: 10px; 
+            color: #3B82F6; /* Azure Blue */
+            text-transform: uppercase;
+            letter-spacing: 0.2em;
+            font-weight: 700;
+            margin-bottom: 8px;
+            display: block;
+        }
+        .value-display {
+            font-family: 'Playfair Display', serif;
+            font-style: italic;
+            font-size: 42px;
+            color: #ffffff;
+            line-height: 1;
+            font-weight: 500;
+            text-shadow: 0 0 20px rgba(59, 130, 246, 0.5);
+        }
+        
+        /* Game Over Screen */
+        #game-over {
+            display: none;
+            position: absolute;
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            pointer-events: auto;
+            background: rgba(10, 10, 20, 0.95);
+            padding: 40px 60px;
+            border: 1px solid rgba(255,255,255,0.1);
+            box-shadow: 0 30px 60px rgba(0,0,0, 0.8);
+            width: 400px;
+            max-width: 90%;
+            z-index: 20;
+            color: #fff;
+        }
+        #game-over h1 {
+            color: #fff;
+            font-family: 'Playfair Display', serif;
+            font-style: italic;
+            font-size: 36px;
+            margin: 0 0 20px 0;
+        }
+        .path-list {
+            margin: 20px 0;
+            display: flex;
+            justify-content: space-between;
+            border-top: 1px solid rgba(255,255,255,0.1);
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+            padding: 15px 0;
+        }
+        .path-step {
+            font-size: 10px;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            color: #888;
+            font-weight: 700;
+        }
+        button {
+            background: #28317C;
+            border: none; color: white;
+            padding: 16px 32px;
+            font-size: 10px; font-weight: 700;
+            cursor: pointer;
+            text-transform: uppercase; letter-spacing: 0.25em;
+            transition: background 0.2s;
+        }
+        button:hover { background: #3B82F6; }
+        
+        /* Mobile Controls */
+        #mobile-controls {
+            display: none; position: absolute; bottom: 0; left: 0; width: 100%; height: 100%; pointer-events: auto;
+        }
+        #joystick-zone {
+            position: absolute; bottom: 40px; left: 40px; width: 120px; height: 120px;
+            border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 50%;
+        }
+        #joystick-knob {
+            position: absolute; top: 50%; left: 50%; width: 40px; height: 40px;
+            background: rgba(255, 255, 255, 0.2); backdrop-filter: blur(4px);
+            border-radius: 50%; transform: translate(-50%, -50%); pointer-events: none;
+        }
+    </style>
+    
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+            }
+        }
+    </script>
+</head>
+<body>
+
+    <div id="canvas-container"></div>
+
+    <div id="ui-layer">
+        <div id="hud-top-left">
+            <div class="label">Career Era</div>
+            <div class="value-display" id="era-display">10s</div>
+        </div>
+        <div id="hud-top-right">
+            <div class="label">Artifacts Collected</div>
+            <div class="value-display" id="score-val">0</div>
+        </div>
+        
+        <div id="game-over">
+            <h1>Career Analysis</h1>
+            <div class="label">Final Trajectory</div>
+            <div class="path-list" id="path-results">
+                <!-- Populated via JS -->
+            </div>
+            <div class="label" style="margin-top: 20px;">Score</div>
+            <div id="final-score" style="font-family: 'Playfair Display'; font-size: 32px; margin-bottom: 30px; color: #3B82F6;">0</div>
+            <button id="restart-btn">New Career</button>
+        </div>
+    </div>
+
+    <div id="mobile-controls">
+        <div id="joystick-zone"><div id="joystick-knob"></div></div>
+    </div>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+        import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+        import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+
+        // --- 1. PROCEDURAL TEXTURES (Dark Blueprint Aesthetic) ---
+        function createMapTexture() {
+            const canvas = document.createElement('canvas');
+            canvas.width = 1024; canvas.height = 1024;
+            const ctx = canvas.getContext('2d');
+            
+            // Background: Deep Blue/Black (Blueprint style)
+            ctx.fillStyle = '#050510'; 
+            ctx.fillRect(0, 0, 1024, 1024);
+            
+            // Grid Lines (Faded Cyan)
+            ctx.strokeStyle = 'rgba(59, 130, 246, 0.1)';
+            ctx.lineWidth = 1;
+            for(let i=0; i<1024; i+=32) {
+                ctx.beginPath(); ctx.moveTo(i, 0); ctx.lineTo(i, 1024); ctx.stroke();
+                ctx.beginPath(); ctx.moveTo(0, i); ctx.lineTo(1024, i); ctx.stroke();
+            }
+
+            // "Landmass" Isolines (Cartography style)
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)'; // White
+            ctx.lineWidth = 2;
+            for(let j=0; j<8; j++) {
+                ctx.beginPath();
+                let startY = Math.random()*1024;
+                ctx.moveTo(0, startY);
+                for(let i=0; i<=1024; i+=50) {
+                     ctx.lineTo(i, startY + Math.sin(i*0.01 + j)*100 + (Math.random()-0.5)*50);
+                }
+                ctx.stroke();
+            }
+
+            // Compass Rose / Decorative Circles
+            ctx.strokeStyle = 'rgba(59, 130, 246, 0.3)';
+            ctx.beginPath(); ctx.arc(512, 512, 200, 0, Math.PI*2); ctx.stroke();
+            ctx.beginPath(); ctx.arc(512, 512, 180, 0, Math.PI*2); ctx.stroke();
+            ctx.setLineDash([15, 15]);
+            ctx.beginPath(); ctx.arc(512, 512, 250, 0, Math.PI*2); ctx.stroke();
+            ctx.setLineDash([]);
+
+            const tex = new THREE.CanvasTexture(canvas);
+            tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+            return tex;
+        }
+
+        function createTextTexture(text) {
+            const canvas = document.createElement('canvas');
+            canvas.width = 512; canvas.height = 128;
+            const ctx = canvas.getContext('2d');
+            // Background with transparency (Void)
+            ctx.fillStyle = 'rgba(10, 10, 20, 0.8)';
+            ctx.fillRect(20, 20, 472, 88);
+            // Border (Azure)
+            ctx.strokeStyle = '#3B82F6';
+            ctx.lineWidth = 2;
+            ctx.strokeRect(20, 20, 472, 88);
+            // Text
+            ctx.fillStyle = '#ffffff';
+            ctx.font = 'bold 40px "Playfair Display", serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(text, 256, 64);
+            return new THREE.CanvasTexture(canvas);
+        }
+
+        // --- CONSTANTS ---
+        const COLORS = {
+            INSTITUTION: 0x28317C,
+            ACADEMIC: 0xE5E5E5,
+            DISCOURSE: 0xFFFFFF,
+            NETWORK: 0x3B82F6,
+            BG: 0x050510, // Void
+            WATER: 0x0a1a3a // Deep Navy
+        };
+
+        const ERAS = ['10s', '20s', '30s', 'LEGEND'];
+        const GATE_DATA = {
+            '10s': [{l:'SCANDAL',t:'n'}, {l:'ELITE',t:'p'}, {l:'DISCOVERY',t:'p'}],
+            '20s': [{l:'EXPULSION',t:'n'}, {l:'ACCLAIM',t:'p'}, {l:'TERMINATION',t:'n'}],
+            '30s': [{l:'HIATUS',t:'u'}, {l:'MUSEUM',t:'p'}, {l:'BIENNALE',t:'p'}]
+        };
+
+        // --- SETUP ---
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(COLORS.BG);
+        // Deep Space Fog
+        scene.fog = new THREE.FogExp2(COLORS.BG, 0.02);
+
+        const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 400);
+        camera.position.set(0, 8, 18); // Slightly higher angle to see the ship
+        camera.lookAt(0, 0, 0);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        renderer.toneMapping = THREE.ACESFilmicToneMapping;
+        renderer.toneMappingExposure = 1.2;
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap; // Softer shadows
+        document.getElementById('canvas-container').appendChild(renderer.domElement);
+
+        // --- LIGHTING (Moonlight) ---
+        const hemiLight = new THREE.HemisphereLight(0x444488, 0x000000, 0.6); // Cool sky, dark ground
+        scene.add(hemiLight);
+        
+        // Main Directional Light (Moon)
+        const dirLight = new THREE.DirectionalLight(0xaaccff, 1.5); 
+        dirLight.position.set(-20, 40, 20);
+        dirLight.castShadow = true;
+        
+        // --- FIX: EXPAND SHADOW CAMERA ---
+        // This fixes the "rectangle" artifact. The shadow camera must cover the entire play area.
+        dirLight.shadow.mapSize.width = 2048;
+        dirLight.shadow.mapSize.height = 2048;
+        dirLight.shadow.camera.near = 0.5;
+        dirLight.shadow.camera.far = 100;
+        dirLight.shadow.camera.left = -50;
+        dirLight.shadow.camera.right = 50;
+        dirLight.shadow.camera.top = 50;
+        dirLight.shadow.camera.bottom = -50;
+        dirLight.shadow.bias = -0.001; // Reduce artifacts
+        scene.add(dirLight);
+        
+        // Fill light
+        const pointLight = new THREE.PointLight(0x3B82F6, 0.5, 50);
+        pointLight.position.set(0, 5, 0);
+        scene.add(pointLight);
+
+        // --- POST PROCESSING (Soft Bloom) ---
+        const composer = new EffectComposer(renderer);
+        composer.addPass(new RenderPass(scene, camera));
+        const bloom = new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 1.5, 0.4, 0.85);
+        bloom.threshold = 0.4; 
+        bloom.strength = 0.5;
+        bloom.radius = 0.5;
+        composer.addPass(bloom);
+
+        // --- ENVIRONMENT ---
+        // 1. Map Plane (Substrate) - Lowered to prevent Z-fighting
+        const mapTex = createMapTexture();
+        const mapPlane = new THREE.Mesh(
+            new THREE.PlaneGeometry(400, 400),
+            new THREE.MeshBasicMaterial({ 
+                map: mapTex, 
+                color: 0x8888ff,
+                transparent: true,
+                opacity: 0.3
+            })
+        );
+        mapPlane.rotation.x = -Math.PI/2;
+        mapPlane.position.y = -8; // Deep under water
+        scene.add(mapPlane);
+
+        // 2. Water Surface
+        const waterGeo = new THREE.PlaneGeometry(400, 400, 100, 100); 
+        const waterMat = new THREE.MeshPhysicalMaterial({
+            color: COLORS.WATER, 
+            transmission: 0.6, // Glassy
+            opacity: 0.8,
+            metalness: 0.6, 
+            roughness: 0.1, 
+            transparent: true,
+            ior: 1.33,
+            reflectivity: 0.8,
+            clearcoat: 1.0,
+            clearcoatRoughness: 0.1,
+            side: THREE.FrontSide
+        });
+        const water = new THREE.Mesh(waterGeo, waterMat);
+        water.rotation.x = -Math.PI/2;
+        water.position.y = -2;
+        water.receiveShadow = true;
+        scene.add(water);
+
+        // 3. Particles (Milky Way Stars)
+        const starGeo = new THREE.BufferGeometry();
+        const starPos = [];
+        for(let i=0; i<1500; i++) starPos.push((Math.random()-0.5)*400, Math.random()*60, (Math.random()-0.5)*300);
+        starGeo.setAttribute('position', new THREE.Float32BufferAttribute(starPos, 3));
+        const stars = new THREE.Points(starGeo, new THREE.PointsMaterial({color: 0xaaddff, size: 0.4, transparent: true, opacity: 0.8, sizeAttenuation: true}));
+        scene.add(stars);
+
+        // --- PLAYER: PROCEDURAL LEGO PIRATE SHIP ---
+        function createLegoShip() {
+            const ship = new THREE.Group();
+            
+            const boxGeo = new THREE.BoxGeometry(1, 1, 1);
+            
+            // Materials - Brighter to pop against dark background
+            const matBlue = new THREE.MeshStandardMaterial({ color: 0x1e3a8a, roughness: 0.2 }); // Hull Blue
+            const matWhite = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.2 }); // Upper White
+            const matRed = new THREE.MeshStandardMaterial({ color: 0xdc2626, roughness: 0.2, emissive: 0x330000 }); // Red Trim
+            const matBlack = new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.5 }); // Mast
+            const matSail = new THREE.MeshStandardMaterial({ color: 0xf0f0f0, side: THREE.DoubleSide }); // Sail
+
+            // 1. Hull Base (Blue)
+            const hullBase = new THREE.Mesh(boxGeo, matBlue);
+            hullBase.scale.set(1.5, 0.8, 4);
+            hullBase.position.y = 0.4;
+            hullBase.castShadow = true;
+            ship.add(hullBase);
+            
+            // Hull Front (Blue)
+            const hullFront = new THREE.Mesh(boxGeo, matBlue);
+            hullFront.scale.set(1.5, 0.8, 1);
+            hullFront.position.set(0, 0.6, -2.2);
+            hullFront.rotation.x = -0.3;
+            hullFront.castShadow = true;
+            ship.add(hullFront);
+
+            // Hull Back (Blue)
+            const hullBack = new THREE.Mesh(boxGeo, matBlue);
+            hullBack.scale.set(1.5, 1.2, 1);
+            hullBack.position.set(0, 0.6, 2.2);
+            hullBack.castShadow = true;
+            ship.add(hullBack);
+
+            // 2. Upper Deck (White)
+            const deck = new THREE.Mesh(boxGeo, matWhite);
+            deck.scale.set(1.7, 0.4, 4.2);
+            deck.position.y = 1.0;
+            deck.castShadow = true;
+            ship.add(deck);
+
+            // Red Trim
+            const trim = new THREE.Mesh(boxGeo, matRed);
+            trim.scale.set(1.8, 0.1, 4.3);
+            trim.position.y = 0.8;
+            ship.add(trim);
+
+            // 3. Cabin (Back)
+            const cabin = new THREE.Mesh(boxGeo, matWhite);
+            cabin.scale.set(1.4, 1.0, 1.2);
+            cabin.position.set(0, 1.6, 1.5);
+            cabin.castShadow = true;
+            ship.add(cabin);
+            const cabinRoof = new THREE.Mesh(boxGeo, matBlue);
+            cabinRoof.scale.set(1.6, 0.2, 1.4);
+            cabinRoof.position.set(0, 2.2, 1.5);
+            ship.add(cabinRoof);
+
+            // 4. Mast
+            const mast = new THREE.Mesh(boxGeo, matBlack);
+            mast.scale.set(0.2, 5, 0.2);
+            mast.position.set(0, 3, -0.5);
+            mast.castShadow = true;
+            ship.add(mast);
+
+            // 5. Crow's Nest
+            const nest = new THREE.Mesh(boxGeo, matRed);
+            nest.scale.set(0.6, 0.4, 0.6);
+            nest.position.set(0, 4.5, -0.5);
+            ship.add(nest);
+
+            // 6. Sails (Curved - Simulated by rotation)
+            const yardMain = new THREE.Mesh(boxGeo, matBlack);
+            yardMain.scale.set(3, 0.1, 0.1);
+            yardMain.position.set(0, 4, -0.5);
+            ship.add(yardMain);
+
+            const sailMain = new THREE.Mesh(new THREE.PlaneGeometry(2.8, 2), matSail);
+            sailMain.position.set(0, 3, -0.4);
+            sailMain.rotation.x = 0.1;
+            sailMain.castShadow = true;
+            ship.add(sailMain);
+
+            const jibGeo = new THREE.BufferGeometry().setFromPoints([
+                new THREE.Vector3(0, 4, -0.5),
+                new THREE.Vector3(0, 1, -3),
+                new THREE.Vector3(0, 1, -0.5)
+            ]);
+            const jib = new THREE.Mesh(jibGeo, matSail);
+            jib.castShadow = true;
+            ship.add(jib);
+
+            // 7. Flag
+            const flagPole = new THREE.Mesh(boxGeo, matBlack);
+            flagPole.scale.set(0.05, 1, 0.05);
+            flagPole.position.set(0, 5.8, -0.5);
+            ship.add(flagPole);
+            
+            const flag = new THREE.Mesh(boxGeo, matRed);
+            flag.scale.set(0.05, 0.4, 0.6);
+            flag.position.set(0, 5.8, -0.8);
+            ship.add(flag);
+
+            return ship;
+        }
+
+        const playerGroup = createLegoShip();
+        scene.add(playerGroup);
+
+        // --- REUSABLE GEOMETRIES ---
+        const GEO_DODECA = new THREE.DodecahedronGeometry(1.2);
+        const GEO_BOX = new THREE.BoxGeometry(1.5, 1.5, 1.5);
+        const GEO_TETRA = new THREE.TetrahedronGeometry(1.2);
+        const GEO_GATE_FRAME = new THREE.BoxGeometry(7, 10, 1);
+        const GEO_GATE_HOLE = new THREE.PlaneGeometry(5, 8);
+        
+        // Updated Materials for Void Lighting (Emissive pop)
+        const MAT_INST = new THREE.MeshStandardMaterial({ color: COLORS.INSTITUTION, metalness:0.8, roughness:0.2, emissive: 0x111133 });
+        const MAT_NET = new THREE.MeshStandardMaterial({ color: COLORS.NETWORK, metalness:0.8, roughness:0.2, emissive: 0x002244 });
+        const MAT_ACAD = new THREE.MeshStandardMaterial({ color: 0xffffff, metalness:0.9, roughness:0.1, emissive: 0x222222 }); // Silver
+        const MAT_WIRE = new THREE.MeshBasicMaterial({ color: 0xffffff, wireframe: true });
+
+        // --- GAME LOOP STATE ---
+        const state = {
+            isRunning: true, isPaused: false,
+            score: 0, eraIndex: 0, speed: 40, distance: 0,
+            path: [], inputX: 0
+        };
+        const artifacts = [];
+        const gates = [];
+
+        window.addEventListener('message', e => { if(e.data?.type === 'PAUSE_GAME') state.isPaused = e.data.payload; });
+
+        // --- CLASSES ---
+        class Artifact {
+            constructor() {
+                this.mesh = new THREE.Group();
+                this.active = false;
+                this.pts = 0;
+                scene.add(this.mesh);
+            }
+            spawn(z) {
+                this.mesh.clear();
+                const r = Math.random();
+                let geo, mat;
+                if(r > 0.7) { 
+                    geo = GEO_DODECA; mat = MAT_INST; this.pts = 10;
+                } else if (r > 0.3) {
+                    geo = GEO_BOX; mat = MAT_NET; this.pts = 5;
+                } else {
+                    geo = GEO_TETRA; mat = MAT_ACAD; this.pts = 2;
+                }
+
+                if(Math.random() < 0.15) { mat = MAT_WIRE; this.pts = 5; }
+
+                const m = new THREE.Mesh(geo, mat);
+                m.castShadow = true;
+                this.mesh.add(m);
+                this.mesh.position.set((Math.random()-0.5)*24, 2, z); 
+                this.active = true; this.mesh.visible = true;
+            }
+            update(dt) {
+                if(!this.active) return;
+                this.mesh.position.z += state.speed * dt;
+                this.mesh.rotation.x += dt; this.mesh.rotation.y += dt;
+                
+                // Bobbing animation
+                this.mesh.position.y = 2 + Math.sin(Date.now()*0.003 + this.mesh.position.x)*0.5;
+
+                if(this.mesh.position.z > 10) { this.active = false; this.mesh.visible = false; }
+            }
+        }
+
+        class Gate {
+            constructor() {
+                this.mesh = new THREE.Group();
+                this.active = false;
+                this.label = "";
+                scene.add(this.mesh);
+            }
+            spawn(z, x, labelData) {
+                this.mesh.clear();
+                this.label = labelData.l;
+                // Dark wood/Obsidian for gates
+                const mat = labelData.t === 'n' ? new THREE.MeshStandardMaterial({color:0x550000, roughness:0.2}) : new THREE.MeshStandardMaterial({color:0x333333, roughness:0.2});
+                
+                const frame = new THREE.Mesh(GEO_GATE_FRAME, mat);
+                frame.castShadow = true;
+                const hole = new THREE.Mesh(GEO_GATE_HOLE, new THREE.MeshBasicMaterial({color:0x000000}));
+                hole.position.z = 0.1;
+                
+                const textTex = createTextTexture(this.label);
+                const textMesh = new THREE.Mesh(new THREE.PlaneGeometry(6, 1.5), new THREE.MeshBasicMaterial({map:textTex, transparent:true}));
+                textMesh.position.set(0, 3.5, 0.6);
+
+                this.mesh.add(frame, hole, textMesh);
+                this.mesh.position.set(x, 2, z);
+                this.active = true; this.mesh.visible = true;
+            }
+            update(dt) {
+                if(!this.active) return;
+                this.mesh.position.z += state.speed * dt;
+                if(this.mesh.position.z > 10) { this.active = false; this.mesh.visible = false; }
+            }
+        }
+
+        // Pools
+        for(let i=0; i<20; i++) artifacts.push(new Artifact());
+        for(let i=0; i<3; i++) gates.push(new Gate());
+
+        // --- ANIMATION ---
+        const clock = new THREE.Clock();
+        
+        function animate() {
+            requestAnimationFrame(animate);
+            if(state.isPaused) return;
+
+            const dt = Math.min(clock.getDelta(), 0.1);
+            const now = clock.getElapsedTime();
+
+            if(state.isRunning) {
+                // Input
+                playerGroup.position.x += state.inputX * 30 * dt;
+                playerGroup.position.x = Math.max(-18, Math.min(18, playerGroup.position.x));
+                
+                // Ship Physics/Animation (Rocking boat)
+                playerGroup.rotation.z = -state.inputX * 0.3 + Math.sin(now * 2) * 0.05;
+                playerGroup.rotation.x = Math.sin(now * 1.5) * 0.05;
+                playerGroup.position.y = Math.sin(now * 2.5) * 0.2 - 0.5; // Sit in water
+
+                // Environment
+                mapTex.offset.y = (now * 0.02) % 1; // Scroll map slower
+                
+                // Water animation
+                const pos = waterGeo.attributes.position;
+                for(let i=0; i<pos.count; i++) {
+                    const x = pos.getX(i);
+                    const y = pos.getY(i);
+                    // Undulating waves
+                    pos.setZ(i, Math.sin(x*0.1 + now)*0.5 + Math.cos(y*0.1 + now*0.8)*0.5);
+                }
+                pos.needsUpdate = true;
+                waterGeo.computeVertexNormals();
+
+                // Spawning
+                state.distance += state.speed * dt;
+                if(Math.random() < 0.04) {
+                    const a = artifacts.find(x => !x.active);
+                    if(a) a.spawn(-120);
+                }
+
+                const ERA_LEN = 400;
+                if(state.distance % ERA_LEN > ERA_LEN - 10 && !gates[0].active && state.eraIndex < 3) {
+                    const era = ERAS[state.eraIndex];
+                    const data = GATE_DATA[era];
+                    if(data) {
+                        gates[0].spawn(-150, -12, data[0]);
+                        gates[1].spawn(-150, 0, data[1]);
+                        gates[2].spawn(-150, 12, data[2]);
+                    }
+                }
+
+                // Collision Logic
+                const pBox = new THREE.Box3().setFromObject(playerGroup);
+                pBox.min.addScalar(0.5); pBox.max.subScalar(0.5);
+                
+                artifacts.forEach(a => {
+                    a.update(dt);
+                    if(a.active) {
+                        const aBox = new THREE.Box3().setFromObject(a.mesh);
+                        if(pBox.intersectsBox(aBox)) {
+                            a.active = false; a.mesh.visible = false;
+                            state.score += a.pts;
+                            document.getElementById('score-val').innerText = state.score;
+                        }
+                    }
+                });
+
+                gates.forEach(g => {
+                    g.update(dt);
+                    if(g.active) {
+                         if(Math.abs(g.mesh.position.z - playerGroup.position.z) < 2 && Math.abs(g.mesh.position.x - playerGroup.position.x) < 4) {
+                             // Gate Pass
+                             state.path.push(g.label);
+                             state.eraIndex++;
+                             gates.forEach(gx => { gx.active = false; gx.mesh.visible = false; });
+                             if(state.eraIndex >= 3) {
+                                 state.isRunning = false;
+                                 document.getElementById('game-over').style.display = 'block';
+                                 document.getElementById('final-score').innerText = state.score;
+                                 const list = document.getElementById('path-results');
+                                 list.innerHTML = '';
+                                 state.path.forEach(p => {
+                                     const d = document.createElement('div'); d.className = 'path-step'; d.innerText = p; list.appendChild(d);
+                                 });
+                             } else {
+                                 document.getElementById('era-display').innerText = ERAS[state.eraIndex];
+                                 state.speed += 5;
+                             }
+                         }
+                    }
+                });
+            }
+
+            composer.render();
+        }
+        animate();
+
+        // --- EVENTS ---
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth/window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            composer.setSize(window.innerWidth, window.innerHeight);
+        });
+        window.addEventListener('keydown', e => {
+            if(e.key === 'ArrowLeft' || e.key === 'a') state.inputX = -1;
+            if(e.key === 'ArrowRight' || e.key === 'd') state.inputX = 1;
+        });
+        window.addEventListener('keyup', () => state.inputX = 0);
+        document.getElementById('restart-btn').addEventListener('click', () => {
+            state.score = 0; state.eraIndex = 0; state.path = []; state.isRunning = true; state.distance = 0;
+            document.getElementById('game-over').style.display = 'none';
+            document.getElementById('era-display').innerText = '10s';
+            document.getElementById('score-val').innerText = '0';
+            artifacts.forEach(x => {x.active=false; x.mesh.visible=false;});
+            gates.forEach(x => {x.active=false; x.mesh.visible=false;});
+            playerGroup.position.set(0,0,0);
+        });
+
+        if('ontouchstart' in window) {
+            document.getElementById('mobile-controls').style.display = 'block';
+            const joy = document.getElementById('joystick-zone');
+            const knob = document.getElementById('joystick-knob');
+            let sx = 0;
+            joy.addEventListener('touchstart', e => sx = e.touches[0].clientX);
+            joy.addEventListener('touchmove', e => {
+                const dx = e.touches[0].clientX - sx;
+                state.inputX = Math.max(-1, Math.min(1, dx/40));
+                knob.style.transform = `translate(calc(-50% + ${state.inputX*40}px), -50%)`;
+            });
+            joy.addEventListener('touchend', () => { state.inputX = 0; knob.style.transform = `translate(-50%, -50%)`; });
+        }
+    </script>
+</body>
+</html>
