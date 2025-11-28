@@ -273,18 +273,18 @@
         dirLight.position.set(-20, 40, 20);
         dirLight.castShadow = true;
         
-        // --- FIX: EXPAND SHADOW CAMERA ---
-        // This fixes the "rectangle" artifact. The shadow camera must cover the entire play area.
+        // --- FIX: EXPAND SHADOW CAMERA & BIAS ---
         dirLight.shadow.mapSize.width = 2048;
         dirLight.shadow.mapSize.height = 2048;
         dirLight.shadow.camera.near = 0.5;
         dirLight.shadow.camera.far = 100;
-        dirLight.shadow.camera.left = -50;
-        dirLight.shadow.camera.right = 50;
-        dirLight.shadow.camera.top = 50;
-        dirLight.shadow.camera.bottom = -50;
-        dirLight.shadow.bias = -0.001; // Reduce artifacts
+        dirLight.shadow.camera.left = -30;
+        dirLight.shadow.camera.right = 30;
+        dirLight.shadow.camera.top = 30;
+        dirLight.shadow.camera.bottom = -30;
+        dirLight.shadow.bias = -0.0005; // Prevent artifacts
         scene.add(dirLight);
+        scene.add(dirLight.target); // Important for tracking
         
         // Fill light
         const pointLight = new THREE.PointLight(0x3B82F6, 0.5, 50);
@@ -348,24 +348,23 @@
         // --- PLAYER: PROCEDURAL LEGO PIRATE SHIP ---
         function createLegoShip() {
             const ship = new THREE.Group();
-            
             const boxGeo = new THREE.BoxGeometry(1, 1, 1);
             
-            // Materials - Brighter to pop against dark background
-            const matBlue = new THREE.MeshStandardMaterial({ color: 0x1e3a8a, roughness: 0.2 }); // Hull Blue
-            const matWhite = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.2 }); // Upper White
-            const matRed = new THREE.MeshStandardMaterial({ color: 0xdc2626, roughness: 0.2, emissive: 0x330000 }); // Red Trim
-            const matBlack = new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.5 }); // Mast
-            const matSail = new THREE.MeshStandardMaterial({ color: 0xf0f0f0, side: THREE.DoubleSide }); // Sail
+            // Materials
+            const matBlue = new THREE.MeshStandardMaterial({ color: 0x1e3a8a, roughness: 0.2 }); 
+            const matWhite = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.2 }); 
+            const matRed = new THREE.MeshStandardMaterial({ color: 0xdc2626, roughness: 0.2, emissive: 0x330000 }); 
+            const matBlack = new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.5 }); 
+            const matSail = new THREE.MeshStandardMaterial({ color: 0xf0f0f0, side: THREE.DoubleSide });
 
-            // 1. Hull Base (Blue)
+            // Hull Base
             const hullBase = new THREE.Mesh(boxGeo, matBlue);
             hullBase.scale.set(1.5, 0.8, 4);
             hullBase.position.y = 0.4;
             hullBase.castShadow = true;
             ship.add(hullBase);
             
-            // Hull Front (Blue)
+            // Hull Front
             const hullFront = new THREE.Mesh(boxGeo, matBlue);
             hullFront.scale.set(1.5, 0.8, 1);
             hullFront.position.set(0, 0.6, -2.2);
@@ -373,14 +372,14 @@
             hullFront.castShadow = true;
             ship.add(hullFront);
 
-            // Hull Back (Blue)
+            // Hull Back
             const hullBack = new THREE.Mesh(boxGeo, matBlue);
             hullBack.scale.set(1.5, 1.2, 1);
             hullBack.position.set(0, 0.6, 2.2);
             hullBack.castShadow = true;
             ship.add(hullBack);
 
-            // 2. Upper Deck (White)
+            // Upper Deck
             const deck = new THREE.Mesh(boxGeo, matWhite);
             deck.scale.set(1.7, 0.4, 4.2);
             deck.position.y = 1.0;
@@ -393,7 +392,7 @@
             trim.position.y = 0.8;
             ship.add(trim);
 
-            // 3. Cabin (Back)
+            // Cabin
             const cabin = new THREE.Mesh(boxGeo, matWhite);
             cabin.scale.set(1.4, 1.0, 1.2);
             cabin.position.set(0, 1.6, 1.5);
@@ -404,20 +403,20 @@
             cabinRoof.position.set(0, 2.2, 1.5);
             ship.add(cabinRoof);
 
-            // 4. Mast
+            // Mast
             const mast = new THREE.Mesh(boxGeo, matBlack);
             mast.scale.set(0.2, 5, 0.2);
             mast.position.set(0, 3, -0.5);
             mast.castShadow = true;
             ship.add(mast);
 
-            // 5. Crow's Nest
+            // Crow's Nest
             const nest = new THREE.Mesh(boxGeo, matRed);
             nest.scale.set(0.6, 0.4, 0.6);
             nest.position.set(0, 4.5, -0.5);
             ship.add(nest);
 
-            // 6. Sails (Curved - Simulated by rotation)
+            // Sails
             const yardMain = new THREE.Mesh(boxGeo, matBlack);
             yardMain.scale.set(3, 0.1, 0.1);
             yardMain.position.set(0, 4, -0.5);
@@ -438,7 +437,7 @@
             jib.castShadow = true;
             ship.add(jib);
 
-            // 7. Flag
+            // Flag
             const flagPole = new THREE.Mesh(boxGeo, matBlack);
             flagPole.scale.set(0.05, 1, 0.05);
             flagPole.position.set(0, 5.8, -0.5);
@@ -462,17 +461,18 @@
         const GEO_GATE_FRAME = new THREE.BoxGeometry(7, 10, 1);
         const GEO_GATE_HOLE = new THREE.PlaneGeometry(5, 8);
         
-        // Updated Materials for Void Lighting (Emissive pop)
         const MAT_INST = new THREE.MeshStandardMaterial({ color: COLORS.INSTITUTION, metalness:0.8, roughness:0.2, emissive: 0x111133 });
         const MAT_NET = new THREE.MeshStandardMaterial({ color: COLORS.NETWORK, metalness:0.8, roughness:0.2, emissive: 0x002244 });
-        const MAT_ACAD = new THREE.MeshStandardMaterial({ color: 0xffffff, metalness:0.9, roughness:0.1, emissive: 0x222222 }); // Silver
+        const MAT_ACAD = new THREE.MeshStandardMaterial({ color: 0xffffff, metalness:0.9, roughness:0.1, emissive: 0x222222 });
         const MAT_WIRE = new THREE.MeshBasicMaterial({ color: 0xffffff, wireframe: true });
 
         // --- GAME LOOP STATE ---
         const state = {
             isRunning: true, isPaused: false,
             score: 0, eraIndex: 0, speed: 40, distance: 0,
-            path: [], inputX: 0
+            path: [], 
+            inputX: 0,
+            velocity: new THREE.Vector2(0,0) // Velocity for physics
         };
         const artifacts = [];
         const gates = [];
@@ -511,10 +511,7 @@
                 if(!this.active) return;
                 this.mesh.position.z += state.speed * dt;
                 this.mesh.rotation.x += dt; this.mesh.rotation.y += dt;
-                
-                // Bobbing animation
                 this.mesh.position.y = 2 + Math.sin(Date.now()*0.003 + this.mesh.position.x)*0.5;
-
                 if(this.mesh.position.z > 10) { this.active = false; this.mesh.visible = false; }
             }
         }
@@ -529,18 +526,14 @@
             spawn(z, x, labelData) {
                 this.mesh.clear();
                 this.label = labelData.l;
-                // Dark wood/Obsidian for gates
                 const mat = labelData.t === 'n' ? new THREE.MeshStandardMaterial({color:0x550000, roughness:0.2}) : new THREE.MeshStandardMaterial({color:0x333333, roughness:0.2});
-                
                 const frame = new THREE.Mesh(GEO_GATE_FRAME, mat);
                 frame.castShadow = true;
                 const hole = new THREE.Mesh(GEO_GATE_HOLE, new THREE.MeshBasicMaterial({color:0x000000}));
                 hole.position.z = 0.1;
-                
                 const textTex = createTextTexture(this.label);
                 const textMesh = new THREE.Mesh(new THREE.PlaneGeometry(6, 1.5), new THREE.MeshBasicMaterial({map:textTex, transparent:true}));
                 textMesh.position.set(0, 3.5, 0.6);
-
                 this.mesh.add(frame, hole, textMesh);
                 this.mesh.position.set(x, 2, z);
                 this.active = true; this.mesh.visible = true;
@@ -552,7 +545,6 @@
             }
         }
 
-        // Pools
         for(let i=0; i<20; i++) artifacts.push(new Artifact());
         for(let i=0; i<3; i++) gates.push(new Gate());
 
@@ -567,30 +559,46 @@
             const now = clock.getElapsedTime();
 
             if(state.isRunning) {
-                // Input
-                playerGroup.position.x += state.inputX * 30 * dt;
+                // --- PHYSICS & MOVEMENT ---
+                // Grounded acceleration/deceleration
+                const targetVel = state.inputX * 35; // Max speed
+                const accel = state.inputX !== 0 ? 3.0 : 1.5; // Faster accel, slower drag
+                state.velocity.x += (targetVel - state.velocity.x) * accel * dt;
+                
+                // Apply Velocity
+                playerGroup.position.x += state.velocity.x * dt;
                 playerGroup.position.x = Math.max(-18, Math.min(18, playerGroup.position.x));
-                
-                // Ship Physics/Animation (Rocking boat)
-                playerGroup.rotation.z = -state.inputX * 0.3 + Math.sin(now * 2) * 0.05;
-                playerGroup.rotation.x = Math.sin(now * 1.5) * 0.05;
-                playerGroup.position.y = Math.sin(now * 2.5) * 0.2 - 0.5; // Sit in water
 
-                // Environment
-                mapTex.offset.y = (now * 0.02) % 1; // Scroll map slower
+                // --- SHADOW TRACKING (FIX FOR ARTIFACTS) ---
+                // Move the light and target with the player so the shadow camera never clips
+                const lightOffset = playerGroup.position.x;
+                dirLight.position.x = -20 + lightOffset; 
+                dirLight.target.position.x = lightOffset;
+                dirLight.target.updateMatrixWorld();
+
+                // --- PROCEDURAL ANIMATION ---
+                // Bank based on velocity (Inertia feel)
+                const bankAngle = -state.velocity.x * 0.015;
+                playerGroup.rotation.z += (bankAngle - playerGroup.rotation.z) * 4.0 * dt;
                 
-                // Water animation
+                // Bobbing & Pitching
+                playerGroup.rotation.x = Math.sin(now * 1.5) * 0.05 - (state.velocity.x/35)*0.1; // Pitch down when fast
+                playerGroup.position.y = Math.sin(now * 2.5) * 0.2 - 0.5; 
+
+                // Environment Scroll
+                mapTex.offset.y = (now * 0.02) % 1; 
+                
+                // Water
                 const pos = waterGeo.attributes.position;
                 for(let i=0; i<pos.count; i++) {
                     const x = pos.getX(i);
                     const y = pos.getY(i);
-                    // Undulating waves
                     pos.setZ(i, Math.sin(x*0.1 + now)*0.5 + Math.cos(y*0.1 + now*0.8)*0.5);
                 }
                 pos.needsUpdate = true;
                 waterGeo.computeVertexNormals();
 
-                // Spawning
+                // Logic Spawning
                 state.distance += state.speed * dt;
                 if(Math.random() < 0.04) {
                     const a = artifacts.find(x => !x.active);
@@ -608,7 +616,7 @@
                     }
                 }
 
-                // Collision Logic
+                // Collisions
                 const pBox = new THREE.Box3().setFromObject(playerGroup);
                 pBox.min.addScalar(0.5); pBox.max.subScalar(0.5);
                 
@@ -628,7 +636,6 @@
                     g.update(dt);
                     if(g.active) {
                          if(Math.abs(g.mesh.position.z - playerGroup.position.z) < 2 && Math.abs(g.mesh.position.x - playerGroup.position.x) < 4) {
-                             // Gate Pass
                              state.path.push(g.label);
                              state.eraIndex++;
                              gates.forEach(gx => { gx.active = false; gx.mesh.visible = false; });
@@ -649,12 +656,10 @@
                     }
                 });
             }
-
             composer.render();
         }
         animate();
 
-        // --- EVENTS ---
         window.addEventListener('resize', () => {
             camera.aspect = window.innerWidth/window.innerHeight;
             camera.updateProjectionMatrix();
@@ -668,6 +673,7 @@
         window.addEventListener('keyup', () => state.inputX = 0);
         document.getElementById('restart-btn').addEventListener('click', () => {
             state.score = 0; state.eraIndex = 0; state.path = []; state.isRunning = true; state.distance = 0;
+            state.velocity.set(0,0);
             document.getElementById('game-over').style.display = 'none';
             document.getElementById('era-display').innerText = '10s';
             document.getElementById('score-val').innerText = '0';
