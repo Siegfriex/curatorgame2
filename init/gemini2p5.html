@@ -4,24 +4,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>Curator's Run Lite (Void)</title>
+    <title>Curator's Run Lite (v4.0)</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@700&family=Playfair+Display:ital@1&display=swap" rel="stylesheet">
     <style>
-        body { margin: 0; background-color: #0a0a0f; color: #fff; font-family: 'Inter', sans-serif; overflow: hidden; }
-        #score-board { position: absolute; top: 20px; left: 20px; font-size: 24px; font-family: 'Playfair Display', serif; }
-        #era-board { position: absolute; top: 20px; right: 20px; font-size: 10px; text-transform: uppercase; letter-spacing: 0.25em; color: #A3A3A3; }
-        #game-over { 
-            display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(10,10,15,0.98); color: #fff;
-            flex-direction: column; justify-content: center; align-items: center; z-index: 20;
-        }
-        button { background: transparent; border: 1px solid rgba(255,255,255,0.2); color: white; padding: 14px 28px; font-size: 10px; font-weight: 600; margin-top: 20px; text-transform: uppercase; letter-spacing: 0.3em; }
-        #joystick { 
-            position: absolute; bottom: 30px; left: 30px; width: 100px; height: 100px; 
-            border: 2px solid rgba(255, 255, 255, 0.2); border-radius: 50%;
-            display: none;
-        }
-        #path-display { font-size: 12px; margin-top: 10px; color: #aaa; }
+        body { margin: 0; background-color: #050510; color: #fff; font-family: 'Inter', sans-serif; overflow: hidden; }
+        #score-board { position: absolute; top: 20px; right: 20px; font-size: 24px; font-family: 'Playfair Display', serif; }
+        #era-board { position: absolute; top: 20px; left: 20px; font-size: 14px; text-transform: uppercase; color: #3B82F6; }
+        #game-over { display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(5,5,16,0.9); flex-direction: column; justify-content: center; align-items: center; z-index: 20; }
+        button { background: #28317C; color: white; border: none; padding: 15px 30px; font-weight: 700; margin-top: 20px; }
     </style>
     <script type="importmap">
         { "imports": { "three": "https://unpkg.com/three@0.160.0/build/three.module.js" } }
@@ -29,25 +19,23 @@
 </head>
 <body>
     <div id="score-board">0</div>
-    <div id="era-board">Era: 10s</div>
+    <div id="era-board">Era: 20s</div>
     <div id="game-over">
-        <h1 style="font-family:'Playfair Display'; font-style:italic;">Voyage Ended</h1>
-        <div id="path-display"></div>
-        <div id="final-stats" style="font-size: 32px; font-weight: bold; margin-top: 10px; color: #3B82F6;"></div>
-        <button onclick="location.reload()">Reinitialize</button>
+        <h1>VOYAGE ENDED</h1>
+        <div id="final-stats" style="font-size: 24px; color: #3B82F6;"></div>
+        <button onclick="location.reload()">RESTART</button>
     </div>
-    <div id="joystick"></div>
 
     <script type="module">
         import * as THREE from 'three';
 
         // --- SETUP ---
         const scene = new THREE.Scene();
-        scene.background = new THREE.Color(0x0a0a0f); 
-        scene.fog = new THREE.FogExp2(0x0a0a0f, 0.025);
+        scene.background = new THREE.Color(0x050510); 
+        scene.fog = new THREE.FogExp2(0x050510, 0.02);
         
         const camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
-        camera.position.set(0, 5, 12);
+        camera.position.set(0, 8, 15);
         camera.lookAt(0,0,0);
 
         const renderer = new THREE.WebGLRenderer({antialias: true});
@@ -55,134 +43,67 @@
         document.body.appendChild(renderer.domElement);
 
         // Lights
-        scene.add(new THREE.AmbientLight(0x404040, 0.6));
-        const dirLight = new THREE.DirectionalLight(0xaaccff, 1.5);
-        dirLight.position.set(5, 10, 5);
-        scene.add(dirLight);
+        const light = new THREE.DirectionalLight(0xffffff, 1.2);
+        light.position.set(5, 10, 5);
+        scene.add(light);
+        scene.add(new THREE.AmbientLight(0x404040));
 
-        // Water (Dark Blue)
+        // Water
         const water = new THREE.Mesh(
-            new THREE.PlaneGeometry(100, 100, 10, 10),
-            new THREE.MeshBasicMaterial({ color: 0x0a1a3a, transparent: true, opacity: 0.6, wireframe: false })
+            new THREE.PlaneGeometry(100, 100),
+            new THREE.MeshLambertMaterial({ color: 0x0a1a55 })
         );
         water.rotation.x = -Math.PI/2;
         water.position.y = -2;
         scene.add(water);
 
-        // Player: Simple Block Ship
+        // Player (Simplified Lego Ship)
         const player = new THREE.Group();
-        const hull = new THREE.Mesh(new THREE.BoxGeometry(2, 0.8, 4), new THREE.MeshLambertMaterial({color: 0x1e3a8a}));
-        const deck = new THREE.Mesh(new THREE.BoxGeometry(1.8, 0.5, 3), new THREE.MeshLambertMaterial({color: 0xffffff}));
-        deck.position.y = 0.5;
-        const mast = new THREE.Mesh(new THREE.BoxGeometry(0.2, 4, 0.2), new THREE.MeshLambertMaterial({color: 0x111111}));
-        mast.position.y = 2;
-        const sail = new THREE.Mesh(new THREE.PlaneGeometry(2.5, 2), new THREE.MeshBasicMaterial({color: 0xffffff, side: THREE.DoubleSide}));
-        sail.position.set(0, 2.5, 0.2);
-        
-        player.add(hull, deck, mast, sail);
+        const hull = new THREE.Mesh(new THREE.BoxGeometry(2, 1, 4), new THREE.MeshLambertMaterial({color: 0x1e3a8a}));
+        const sail = new THREE.Mesh(new THREE.PlaneGeometry(2, 3), new THREE.MeshBasicMaterial({color: 0xffffff, side: THREE.DoubleSide}));
+        sail.position.set(0, 3, 0);
+        player.add(hull, sail);
         scene.add(player);
 
-        // Helper to Create Texture Text
-        function createLabel(text) {
-            const canvas = document.createElement('canvas');
-            canvas.width = 256; canvas.height = 64;
-            const ctx = canvas.getContext('2d');
-            ctx.fillStyle = '#0a0a14';
-            ctx.fillRect(0,0,256,64);
-            ctx.fillStyle = '#ffffff';
-            ctx.font = 'bold 30px sans-serif';
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
-            ctx.fillText(text, 128, 32);
-            const tex = new THREE.CanvasTexture(canvas);
-            const mat = new THREE.MeshBasicMaterial({map: tex, side: THREE.DoubleSide});
-            return new THREE.Mesh(new THREE.PlaneGeometry(6, 1.5), mat);
-        }
-
         // Logic
-        const DATA = {
-            '10s': ['SCANDAL', 'ELITE', 'DISCOVERY'],
-            '20s': ['EXPULSION', 'ACCLAIM', 'TERMINATION'],
-            '30s': ['HIATUS', 'MUSEUM', 'BIENNALE']
-        };
-        const ERAS = ['10s', '20s', '30s', 'LEGEND'];
-        let score = 0, era = 0, speed = 25, inputX = 0, distance = 0;
+        let score = 0, era = 0, speed = 30;
         let isRunning = true;
+        let inputX = 0, velX = 0;
         const objects = [];
-        const path = [];
-
-        function spawn() {
-            if(Math.random() < 0.05) {
-                // Artifact
-                const geo = Math.random()>0.5 ? new THREE.DodecahedronGeometry(1) : new THREE.BoxGeometry(1.2,1.2,1.2);
-                const col = Math.random()>0.5 ? 0x28317C : 0xE5E5E5;
-                const mesh = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({color: col}));
-                mesh.position.set((Math.random()-0.5)*20, 0, -60);
-                mesh.userData = { type: 'art', pts: 5 };
-                scene.add(mesh);
-                objects.push(mesh);
-            }
-            // Gates
-            const ERA_LEN = 400;
-            if(distance % ERA_LEN > ERA_LEN-5 && era < 3) {
-                // Check if gates already exist
-                const existing = objects.find(o => o.userData.type === 'gate');
-                if(!existing) {
-                    const labels = DATA[ERAS[era]];
-                    [-10, 0, 10].forEach((x, i) => {
-                        const g = new THREE.Group();
-                        const frame = new THREE.Mesh(new THREE.BoxGeometry(5, 7, 1), new THREE.MeshLambertMaterial({color: 0x333}));
-                        const lbl = createLabel(labels[i]);
-                        lbl.position.y = 4;
-                        g.add(frame, lbl);
-                        g.position.set(x, 2, -60);
-                        g.userData = { type: 'gate', label: labels[i] };
-                        scene.add(g);
-                        objects.push(g);
-                    });
-                }
-            }
-        }
+        const ERAS = ['20s', '40s', '60s'];
 
         function animate() {
             if(!isRunning) return;
             requestAnimationFrame(animate);
 
-            player.position.x += inputX * 0.4;
-            player.position.x = Math.max(-15, Math.min(15, player.position.x));
-            player.rotation.z = -inputX * 0.3;
-            player.rotation.x = Math.sin(Date.now()*0.005) * 0.1; // Bobbing
+            // Physics (Simplified Inertia)
+            velX += (inputX * 30 - velX) * 0.1;
+            player.position.x += velX * 0.03;
+            player.rotation.z = -velX * 0.002;
             
-            distance += 0.5;
-            spawn();
+            // Light Tracking
+            light.position.x = player.position.x + 5;
 
+            // Spawn
+            if(Math.random() < 0.05) {
+                const mesh = new THREE.Mesh(new THREE.BoxGeometry(1,1,1), new THREE.MeshLambertMaterial({color: Math.random()>0.5 ? 0x28317C : 0x3B82F6}));
+                mesh.position.set((Math.random()-0.5)*20, 0, -60);
+                mesh.userData = {type:'art'};
+                scene.add(mesh);
+                objects.push(mesh);
+            }
+
+            // Object Loop
             for(let i=objects.length-1; i>=0; i--) {
                 const o = objects[i];
-                o.position.z += 0.4; 
-
+                o.position.z += 0.5;
                 if(o.position.z > 5) { scene.remove(o); objects.splice(i,1); }
                 
-                // Collision
-                if(Math.abs(o.position.z - player.position.z) < 2 && Math.abs(o.position.x - player.position.x) < 3) {
+                if(o.position.distanceTo(player.position) < 3) {
                     if(o.userData.type === 'art') {
-                        score += o.userData.pts;
+                        score += 10;
                         document.getElementById('score-board').innerText = score;
                         scene.remove(o); objects.splice(i,1);
-                    } else if(o.userData.type === 'gate') {
-                        path.push(o.userData.label);
-                        era++;
-                        // remove all gates
-                        for(let k=objects.length-1; k>=0; k--) {
-                            if(objects[k].userData.type==='gate') { scene.remove(objects[k]); objects.splice(k,1); i--; }
-                        }
-                        if(era >= 3) {
-                            isRunning = false;
-                            document.getElementById('game-over').style.display = 'flex';
-                            document.getElementById('final-stats').innerText = score;
-                            document.getElementById('path-display').innerText = path.join(' -> ');
-                        } else {
-                            document.getElementById('era-board').innerText = `Era: ${ERAS[era]}`;
-                        }
                     }
                 }
             }
@@ -190,19 +111,15 @@
         }
         animate();
 
-        window.addEventListener('keydown', e => {
-             if(e.key==='ArrowLeft') inputX=-1; 
-             if(e.key==='ArrowRight') inputX=1; 
-        });
+        window.addEventListener('keydown', e => { if(e.key=='ArrowLeft') inputX=-1; if(e.key=='ArrowRight') inputX=1; });
         window.addEventListener('keyup', () => inputX=0);
         
         if('ontouchstart' in window) {
-            document.getElementById('joystick').style.display = 'block';
-            document.addEventListener('touchmove', e => {
-                inputX = e.touches[0].clientX > window.innerWidth/2 ? 1 : -1;
-            });
+            document.addEventListener('touchmove', e => inputX = (e.touches[0].clientX / window.innerWidth - 0.5) * 2);
             document.addEventListener('touchend', () => inputX=0);
         }
+        
+        window.addEventListener('message', e => { if(e.data.type === 'PAUSE_GAME') isRunning = !e.data.payload; if(isRunning) animate(); });
     </script>
 </body>
 </html>
